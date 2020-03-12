@@ -1,10 +1,29 @@
 <template>
   <menu class="app-menu">
     <div v-if="session.signedIn" class="user-box">
-      <div>
-        <h3>Your Address</h3>
-        <Bech32 :address="session.address || ''" />
+      <div class="user-box-address">
+        <div>
+          <h3>Your Address</h3>
+          <Bech32 :address="session.address || ''" />
+        </div>
+        <a v-if="session.signedIn" id="sign-out" @click="signOut()">
+          <i v-tooltip.top="'Sign Out'" class="material-icons notranslate">
+            exit_to_app
+          </i>
+        </a>
       </div>
+      <a
+        v-if="!session.isMobile && session.sessionType === 'ledger'"
+        class="show-on-ledger"
+        @click="showAddressOnLedger()"
+      >
+        Show on Ledger
+      </a>
+      <TmFormMsg
+        v-if="ledgerAddressError"
+        :msg="ledgerAddressError"
+        type="custom"
+      />
     </div>
     <TmBtn
       v-else
@@ -121,13 +140,6 @@
       </router-link>
     </div>
 
-    <div v-if="session.signedIn" class="sign-out">
-      <a id="sign-out" @click="signOut()">
-        <i v-tooltip.top="'Sign Out'" class="material-icons">exit_to_app</i>
-        Sign out
-      </a>
-    </div>
-
     <ConnectedNetwork />
   </menu>
 </template>
@@ -137,20 +149,26 @@ import noScroll from "no-scroll"
 import Bech32 from "common/Bech32"
 import ConnectedNetwork from "common/TmConnectedNetwork"
 import TmBtn from "common/TmBtn"
+import TmFormMsg from "common/TmFormMsg"
 import { mapState, mapGetters } from "vuex"
 import { atoms, viewDenom, shortDecimals } from "scripts/num.js"
+
 export default {
   name: `app-menu`,
   components: {
     Bech32,
     ConnectedNetwork,
-    TmBtn
+    TmBtn,
+    TmFormMsg
   },
   filters: {
     atoms,
     viewDenom,
     shortDecimals
   },
+  data: () => ({
+    ledgerAddressError: undefined
+  }),
   computed: {
     ...mapState([`session`]),
     ...mapGetters([`liquidAtoms`, `totalAtoms`, `bondDenom`])
@@ -167,6 +185,23 @@ export default {
     signIn() {
       this.$router.push(`/welcome`)
       this.$emit(`close`)
+    },
+    async showAddressOnLedger() {
+      if (this.messageTimeout) {
+        clearTimeout(this.messageTimeout)
+        this.messageTimeout = undefined
+      }
+      this.ledgerAddressError = undefined
+      try {
+        console.log("calling showAddressOnLedgerFn")
+        await this.$store.dispatch(`showLedgerAddress`)
+      } catch (error) {
+        this.ledgerAddressError = error.message
+        this.messageTimeout = setTimeout(
+          () => (this.ledgerAddressError = undefined),
+          8000
+        )
+      }
     }
   }
 }
@@ -206,8 +241,24 @@ export default {
   margin: 2.5rem 1rem 1rem;
 }
 
+.show-on-ledger {
+  display: block;
+  padding-top: 1rem;
+}
+.show-on-ledger:hover {
+  cursor: pointer;
+}
+
+.user-box-address {
+  font-size: 12px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .user-box {
-  font-size: 14px;
+  font-size: 12px;
   margin: 0 1rem 2rem 1rem;
   padding: 0.5rem 0.75rem;
   color: var(--text-white);
